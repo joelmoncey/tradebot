@@ -25,21 +25,69 @@ class GrowwTrader:
     def place_order(self, signal):
         """
         Places an order based on the signal.
+        For "Above" price (Buy Stop), we use SL-Limit or SL-Market order.
         """
+        symbol = signal['symbol']
+        buy_price = signal.get('price')
+        
         if self.dry_run:
-            logger.info(f"[DRY RUN] Placing order: {signal}")
+            logger.info(f"[DRY RUN] Would search for '{symbol}' and place Buy Order > {buy_price}")
             return True
 
         try:
-            # map signal to groww order params
-            # This is a simplified example. You need to adapt to actual Groww API methods
-            order_type = 'LIMIT' if signal.get('price') else 'MARKET'
+            # 1. Search for the Scrip ID
+            search_results = self.groww.search_scrip(symbol)
+            if not search_results or len(search_results) == 0:
+                logger.error(f"Could not find scrip for symbol: {symbol}")
+                return False
             
-            # Example call (verify with actual SDK docs)
-            # response = self.groww.place_order(...) 
+            # Assuming the first result is the correct one (usually correct for explicit names)
+            scrip = search_results[0]
+            search_id = scrip['searchId']
+            logger.info(f"Resolved {symbol} to ID: {search_id} ({scrip['displayName']})")
+
+            # 2. Prepare Order Params
+            # IF "price" is present, it means "Buy Above X", so use SL Order
+            if buy_price and buy_price > 0:
+                # Buying ABOVE market price requires a STOP LOSS LIMIT order
+                # Trigger Price = buy_price
+                # Limit Price = slightly higher to ensure fill (e.g., +0.5% or +1 rupee)
+                limit_price = buy_price + 1.0 
+                
+                order_details = {
+                    'exchange': 'NSE',  # Options are usually on NSE
+                    'security_id': search_id,
+                    'transaction_type': 'BUY',
+                    'quantity': 1, # TODO: Make this configurable or lot size dependent
+                    'price': limit_price,
+                    'trigger_price': buy_price,
+                    'order_type': 'SL_LIMIT', 
+                    'product_type': 'I_FO', # Intraday F&O usually, or 'D_FO' for delivery
+                    'validity': 'DAY'
+                }
+            else:
+                # Market Order
+                order_details = {
+                    'exchange': 'NSE',
+                    'security_id': search_id,
+                    'transaction_type': 'BUY',
+                    'quantity': 1,
+                    'price': 0,
+                    'order_type': 'MARKET',
+                    'product_type': 'I_FO',
+                    'validity': 'DAY'
+                }
+
+            logger.info(f"Placing order: {order_details}")
             
-            logger.info(f"Order placed for {signal['symbol']}")
+            # 3. Execute Order
+            # Note: actual method name involves making a dict and sending it
+            # Using the simplified wrapper if available, or raw call
+            response = self.groww.place_order(**order_details)
+            
+            logger.info(f"Order Response: {response}")
             return True
+
         except Exception as e:
-            logger.error(f"Failed to place order: {e}")
+            logger.error(f"Failed to place order for {symbol}: {e}")
             return False
