@@ -22,6 +22,23 @@ class GrowwTrader:
             except Exception as e:
                 logger.error(f"Failed to authenticate Groww API: {e}")
 
+    def get_lot_size(self, symbol):
+        """
+        Determines lot size based on symbol name.
+        """
+        sym = symbol.upper()
+        if "BANKNIFTY" in sym:
+            return 15
+        elif "FINNIFTY" in sym:
+            return 25 
+        elif "MIDCPNIFTY" in sym:
+            return 50 # Verify current lot sizes
+        elif "NIFTY" in sym:
+            return 25
+        elif "SENSEX" in sym:
+            return 10
+        return 1 # Default for Equity
+
     def place_order(self, signal):
         """
         Places an order based on the signal.
@@ -30,8 +47,11 @@ class GrowwTrader:
         symbol = signal['symbol']
         buy_price = signal.get('price')
         
+        # Calculate Quantity
+        quantity = self.get_lot_size(symbol)
+
         if self.dry_run:
-            logger.info(f"[DRY RUN] Would search for '{symbol}' and place Buy Order > {buy_price}")
+            logger.info(f"[DRY RUN] Would search for '{symbol}' and place Buy Order > {buy_price} (Qty: {quantity})")
             return True
 
         try:
@@ -58,7 +78,7 @@ class GrowwTrader:
                     'exchange': 'NSE',  # Options are usually on NSE
                     'security_id': search_id,
                     'transaction_type': 'BUY',
-                    'quantity': 1, # TODO: Make this configurable or lot size dependent
+                    'quantity': quantity, 
                     'price': limit_price,
                     'trigger_price': buy_price,
                     'order_type': 'SL_LIMIT', 
@@ -71,7 +91,7 @@ class GrowwTrader:
                     'exchange': 'NSE',
                     'security_id': search_id,
                     'transaction_type': 'BUY',
-                    'quantity': 1,
+                    'quantity': quantity,
                     'price': 0,
                     'order_type': 'MARKET',
                     'product_type': 'I_FO',
