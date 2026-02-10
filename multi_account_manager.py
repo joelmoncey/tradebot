@@ -48,16 +48,52 @@ class MultiAccountManager:
         except FileNotFoundError:
             pass
 
-    async def execute_trade_for_all(self, signal):
+    async def monitor_and_execute(self, signal):
+        """
+        Monitors price if needed, then executes trade for all accounts.
+        """
+        symbol = signal['symbol']
+        trigger_price = signal.get('price')
+        
+        # Determine if we need to watch locally
+        if trigger_price:
+            logger.info(f"Starting Local Watcher for {symbol} > {trigger_price}...")
+            # Use the first trader to check prices (assuming all see same market data)
+            reference_trader = self.traders[0]["trader"]
+            
+            while True:
+                ltp = reference_trader.get_latest_price(symbol)
+                if ltp is None:
+                    logger.warning(f"Could not fetch LTP for {symbol}. Retrying...")
+                    await asyncio.sleep(2)
+                    continue
+                
+                logger.info(f"Watching {symbol}: LTP {ltp} | Trigger {trigger_price}")
+                
+                # Check for trigger condition
+                # Use a small buffer (e.g., 0.5%) or strict check
+                if ltp >= trigger_price:
+                    logger.info(f"Trigger HIT! {ltp} >= {trigger_price}. Executing orders...")
+                    break
+                
+                await asyncio.sleep(2) # Poll every 2 seconds
+
+        # Create tasks for all accounts
         tasks = []
         for account in self.traders:
             name = account["name"]
             trader = account["trader"]
             logger.info(f"Executing trade for {name}...")
-            # We wrap the synchronous call in a thread run if needed, but for now we'll call directly
-            # For true parallelism with blocking IO, we'd use run_in_executor
-            # But here we will just call it.
             try:
+                # Pass directly since we already waited for the trigger
+                # We can now place a MARKET or IMMEDIATE LIMIT order since check passed
+                # BUT user might still want SL logic in system.
+                # Given user context: "Above is the buying price... set order on groww at buying price"
+                # If we bypassed locally, we can now place the order.
+                # Let's keep place_order logic which sends SL_LIMIT as a safeguard
+                # OR switch to MARKET if price is already crossed.
+                # For safety, we just call place_order which sends SL_LIMIT. 
+                # Since price >= trigger, SL_LIMIT will execute immediately or sit as pending if price dips back.
                 success = trader.place_order(signal)
                 status = "SUCCESS" if success else "FAILED"
                 logger.info(f"Account {name}: {status}")
@@ -79,8 +115,9 @@ class MultiAccountManager:
                     "target": row["target"]
                 }
                 
-                logger.info(f"New Signal! Broadcasting to {len(self.traders)} accounts.")
-                asyncio.create_task(self.execute_trade_for_all(signal))
+                logger.info(f"New Signal! Starting async monitor task...")
+                # Fire and forget the monitor task so we can keep listening for new signals
+                asyncio.create_task(self.monitor_and_execute(signal))
                 self.processed_ids.add(signal_id)
 
         except FileNotFoundError:
