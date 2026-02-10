@@ -18,7 +18,7 @@ def save_signal_to_csv(signal):
         try:
             df = pd.read_csv(CSV_FILE)
         except FileNotFoundError:
-            df = pd.DataFrame(columns=["timestamp", "signal_id", "symbol", "action", "price", "stop_loss", "target", "status"])
+            df = pd.DataFrame(columns=["timestamp", "signal_id", "symbol", "action", "price", "stop_loss", "target", "status", "type"])
 
         # Create new row
         new_row = {
@@ -29,7 +29,8 @@ def save_signal_to_csv(signal):
             "price": signal['price'],
             "stop_loss": signal['sl'],
             "target": signal['target'],
-            "status": "NEW"
+            "status": "NEW",
+            "type": signal.get('type', 'EQUITY')
         }
 
         # Append and save
