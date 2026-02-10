@@ -82,9 +82,10 @@ class GrowwTrader:
                     'price': limit_price,
                     'trigger_price': buy_price,
                     'order_type': 'SL_LIMIT', 
-                    'product_type': 'I_FO', # Intraday F&O usually, or 'D_FO' for delivery
+                    'product_type': 'I_FO', 
                     'validity': 'DAY'
                 }
+                logger.info(f"Placing PENDING SL-LIMIT Order (Wait for Price > {buy_price}): {order_details}")
             else:
                 # Market Order
                 order_details = {
